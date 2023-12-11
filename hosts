@@ -16,6 +16,9 @@
 #      102.54.94.97     rhino.acme.com          # source server
 #       38.25.63.10     x.acme.com              # x client host
 
+# Website-Blacklist
+127.0.0.1 www.test.com
+
 # localhost name resolution is handled within DNS itself.
 #	127.0.0.1       localhost
 #	::1             localhost
@@ -25,3 +28,5 @@
 # To allow the same kube context to work on the host and the container:
 127.0.0.1 kubernetes.docker.internal
 # End of section
+
+

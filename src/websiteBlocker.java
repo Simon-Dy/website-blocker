@@ -22,6 +22,7 @@ public class websiteBlocker extends JFrame {
 	private JTextArea textArea;
 
 	String filePath = "../website-blocker/hosts";
+	//String filePath = "C:\\Windows\\System32\\drivers\\etc\\hosts";
 	String filePathBackup = "../website-blocker/hosts_backup";
 	String filePathSave = "../website-blocker/Blacklist.txt";
 
@@ -124,15 +125,20 @@ public class websiteBlocker extends JFrame {
 		boolean positionFound = false;
 		int successfulWrites = 0;
 		long position = 0;
-		String searchWord = "#Website-Blacklist";
+		String searchWord = "# Website-Blacklist";
 
-		String regex = "^www\\.[a-zA-Z0-9-]+\\.[a-zA-Z]{2,}(\\n)?$";
+		String regex = "^[a-zA-Z0-9-]+\\.[a-zA-Z0-9-]+\\.[a-zA-Z]{2,}(\\n)?$";
 		Pattern pattern = Pattern.compile(regex);
 
 		String text = textArea.getText();
 		String[] lines = text.split("\\n");
 		for (String line : lines) {
+			
+			//Adresse säubern (Zeilenumbruch, https, alles nach der TLD - zB www.test.com"/unnoetige-sachen/in-der-url")
 			line = line.replaceAll("\\n$", "");
+			line = line.replaceAll("^https?://", "");
+			line = line.replaceAll("\\.([a-zA-Z]{2,})(/.*)?$", ".$1");
+			
 			Matcher matcher = pattern.matcher(line);
 			if (!matcher.matches() || line.length() < 7) {
 				//JOptionPane.showMessageDialog(this, "Webseite bitte im Format www.webseite.domain angeben.");
