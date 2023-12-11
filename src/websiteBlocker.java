@@ -1,4 +1,8 @@
 import javax.swing.*;
+
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.BufferedReader;
@@ -7,14 +11,21 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 public class websiteBlocker extends JFrame {
 
     private JTextArea textArea;
-
+    
+    String filePath = "../website-blocker/hosts";
+    String filePathBackup = "../website-blocker/hosts_backup";
+	String filePathSave = "../website-blocker/Blacklist.txt";
+	
     public websiteBlocker() {
         // Setzt die Grundkonfiguration für das JFrame
-        setTitle("Text Editor");
+        setTitle("Website-Blocker");
         setSize(400, 300);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
@@ -22,8 +33,11 @@ public class websiteBlocker extends JFrame {
         textArea = new JTextArea();
         JScrollPane scrollPane = new JScrollPane(textArea);
 
-        // Erstellt einen JButton zum Speichern des Textes
-        JButton saveButton = new JButton("Speichern");
+        JButton saveButton = new JButton("Block Website");
+        JButton manageButton = new JButton("Show blocked Websites");
+        JButton backButton = new JButton("Back");
+        backButton.setVisible(false);
+
         saveButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -31,16 +45,76 @@ public class websiteBlocker extends JFrame {
             }
         });
 
-        // Fügt die Komponenten zum Layout hinzu
-        getContentPane().add(scrollPane, "Center");
-        getContentPane().add(saveButton, "South");
+        manageButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+            	saveButton.setVisible(false);
+            	manageButton.setVisible(false);
+            	backButton.setVisible(true);
+            	textArea.setEditable(false);
+            	textArea.setText(getFile(filePathSave));
+            }
+        });
+        
+        backButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+            	saveButton.setVisible(true);
+            	manageButton.setVisible(true);
+            	backButton.setVisible(false);
+            	textArea.setEditable(true);
+            	textArea.setText("");
+            }
+        });
+
+        getContentPane().setLayout(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        
+        // JTextArea: nimmt mehrere Zellen im Gitter in Anspruch (ganze Spalte)
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.gridwidth = 2; // Zwei Zellen in der Breite
+        gbc.gridheight = 1; // Eine Zelle in der Höhe
+        gbc.fill = GridBagConstraints.BOTH; // Füllt sowohl horizontal als auch vertikal
+        gbc.weightx = 1.0; // Gewichtung in horizontaler Richtung
+        gbc.weighty = 8.0; // Gewichtung in vertikaler Richtung
+        getContentPane().add(scrollPane, gbc);
+
+        // Clear Button: nimmt eine Zelle im Gitter ein
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.gridwidth = 1; // Eine Zelle in der Breite
+        gbc.gridheight = 1; // Eine Zelle in der Höhe
+        gbc.fill = GridBagConstraints.BOTH; // Füllt horizontal
+        gbc.weightx = 1.0; // Keine Gewichtung in horizontaler Richtung
+        gbc.weighty = 4.0; // Keine Gewichtung in vertikaler Richtung
+        getContentPane().add(saveButton, gbc);
+
+        // Additional Button: nimmt eine Zelle im Gitter ein
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        gbc.gridwidth = 1; // Eine Zelle in der Breite
+        gbc.gridheight = 1; // Eine Zelle in der Höhe
+        gbc.fill = GridBagConstraints.BOTH; // Füllt horizontal
+        gbc.weightx = 1.0; // Keine Gewichtung in horizontaler Richtung
+        gbc.weighty = 1.0; // Keine Gewichtung in vertikaler Richtung
+        getContentPane().add(manageButton, gbc);
+        
+        // Additional Button: nimmt eine Zelle im Gitter ein
+        gbc.gridx = 0;
+        gbc.gridy = 3;
+        gbc.gridwidth = 1; // Eine Zelle in der Breite
+        gbc.gridheight = 1; // Eine Zelle in der Höhe
+        gbc.fill = GridBagConstraints.BOTH; // Füllt horizontal
+        gbc.weightx = 1.0; // Keine Gewichtung in horizontaler Richtung
+        gbc.weighty = 1.0; // Keine Gewichtung in vertikaler Richtung
+        getContentPane().add(backButton, gbc);
+        
+        checkForBackup();
     }
     
     // Wenn der Benutzer auf "Speichern" klickt
     private void speichern() {
-    	String filePath = "../website-blocker/hosts.txt";
-    	String filePathSave = "../website-blocker/Blacklist.txt";
-    	
         // Zeigt einen Dialog zum Speichern an
         //JFileChooser fileChooser = new JFileChooser();
         //int result = fileChooser.showSaveDialog(this);
@@ -74,7 +148,7 @@ public class websiteBlocker extends JFrame {
              
              if (!positionFound) {
             	 BufferedWriter writer = new BufferedWriter(new FileWriter(filePath, true));
-                 writer.write(searchWord);
+                 writer.write("\n" + searchWord);
                  writer.newLine();
                  writer.close();
                  positionFound = true;
@@ -89,11 +163,13 @@ public class websiteBlocker extends JFrame {
         		try {
 	                // Erstellt eine BufferedWriter, um ans Ende der Datei zu schreiben
 	                BufferedWriter writer = new BufferedWriter(new FileWriter(filePath, true));
-	                writer.write(textArea.getText());
+	                writer.write("127.0.0.1 " + textArea.getText());
 	                writer.newLine();
 	                writer.close();
 	                
+	                putToSave(textArea.getText());
 	                JOptionPane.showMessageDialog(this, "Text erfolgreich gespeichert.");
+	                textArea.setText("");
 	            } catch (IOException e) {
 	                e.printStackTrace();
 	                JOptionPane.showMessageDialog(this, "Fehler beim Speichern der Datei.");
@@ -114,14 +190,17 @@ public class websiteBlocker extends JFrame {
                     
                     // schreibe den neuen Inhalt
                     randomAccessFile.seek(position);
-                    randomAccessFile.writeBytes(textArea.getText());
+                    randomAccessFile.writeBytes("127.0.0.1 " + textArea.getText());
                     randomAccessFile.writeBytes(System.lineSeparator());
                     
                     // füge die restliche Datei wieder an
                     // randomAccessFile.seek(randomAccessFile.length());
                     randomAccessFile.write(remainingBytes);
                     randomAccessFile.close();
+                    
+                    putToSave(textArea.getText());
                     JOptionPane.showMessageDialog(this, "Text erfolgreich gespeichert.");
+                    textArea.setText("");
                 } catch (IOException e) {
                     e.printStackTrace();
                     System.err.println("Fehler beim Schreiben an eine bestimmte Stelle in der Datei.");
@@ -130,6 +209,41 @@ public class websiteBlocker extends JFrame {
         }
     }
 
+    public void putToSave(String text) {
+    	try {
+            // Erstellt eine BufferedWriter, um ans Ende der Datei zu schreiben
+            BufferedWriter writer = new BufferedWriter(new FileWriter(filePathSave, true));
+            writer.write(text);
+            writer.newLine();
+            writer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Fehler beim Speichern der Datei.");
+        }
+    }
+    
+    public String getFile(String fp) {
+    	try {
+            // Liest den gesamten Inhalt der Datei als String
+            Path path = Paths.get(fp);
+            byte[] fileBytes = Files.readAllBytes(path);
+            String fileContent = new String(fileBytes);
+
+            // Verarbeitet den String (hier wird er einfach ausgegeben)
+            System.out.println("Inhalt der Datei:");
+            System.out.println(fileContent);
+            return fileContent;
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.err.println("Fehler beim Lesen der Datei.");
+        }
+    	return "";
+    }
+    
+    public void checkForBackup() {
+    	
+    }
+    
     public static void main(String[] args) {
         // Erstellt eine Instanz der GUI und zeigt sie an
         SwingUtilities.invokeLater(new Runnable() {
