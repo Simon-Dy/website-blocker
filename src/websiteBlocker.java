@@ -25,15 +25,19 @@ public class websiteBlocker extends JFrame {
 
 	private JTextArea textArea;
 
-	String filePath = "../website-blocker/hosts";
-	//String filePath = "C:\\Windows\\System32\\drivers\\etc\\hosts";
-	String filePathBackup = "../website-blocker/hosts_backup";
-	String filePathSave = "../website-blocker/Blacklist.txt";
+	private String filePath = "../website-blocker/hosts";
+	//private static String filePath = "C:\\Windows\\System32\\drivers\\etc\\hosts";
+	private String filePathBackup = "../website-blocker/hosts_backup";
+	private String filePathSave = "../website-blocker/Blacklist.txt";
 	
-	public static int selectedIndex = -1;
-	public static String selectedValue;
+	private static int selectedIndex = -1;
+	private static String selectedValue;
 
 	public websiteBlocker() {
+		
+		//erstmaliges Speichern der (evenuell bereits vorhandenen) Blacklist
+		speichern(getFileContent(filePathSave), false);
+				
 		// Setzt die Grundkonfiguration für das JFrame
 		setTitle("Website-Blocker");
 		setSize(420, 320);
@@ -83,7 +87,7 @@ public class websiteBlocker extends JFrame {
 		saveButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				speichern();
+				speichern(textArea.getText(), true);
 			}
 		});
 
@@ -201,8 +205,8 @@ public class websiteBlocker extends JFrame {
 		checkForBackup();
 	}
 
-	// Wenn der Benutzer auf "Speichern" klickt
-	private void speichern() {
+	// Wenn der Benutzer auf "Speichern" klickt, schreibt die Webseiten in die hosts Datei (und zusätzlich in die Blacklist-Textdatei falls true)
+	private void speichern(String text, boolean saveToBlacklist) {
 		// Zeigt einen Dialog zum Speichern an
 		// JFileChooser fileChooser = new JFileChooser();
 		// int result = fileChooser.showSaveDialog(this);
@@ -215,10 +219,12 @@ public class websiteBlocker extends JFrame {
 		String regex = "^[a-zA-Z0-9-]+\\.[a-zA-Z0-9-]+\\.[a-zA-Z]{2,}(\\n)?$";
 		Pattern pattern = Pattern.compile(regex);
 
-		String text = textArea.getText();
 		String[] lines = text.split("\\n");
 		for (String line : lines) {
-			
+			line = line.trim();
+			//überspringe Zeilen mit # (auskommentierte bzw wieder erlaubte Webseiten), seltener Fall bei erstmaliger Ausführung des Programms und importierter Blacklist
+			if(line.startsWith("#"))
+				continue;
 			//Adresse säubern (Zeilenumbruch, https, alles nach der TLD - zB www.test.com"/unnoetige-sachen/in-der-url")
 			line = line.replaceAll("\\n$", "");
 			line = line.replaceAll("^https?://", "");
@@ -231,7 +237,7 @@ public class websiteBlocker extends JFrame {
 				try {
 					// Öffnet die Datei zum Lesen
 					RandomAccessFile randomAccessFile = new RandomAccessFile(filePath, "rw");
-
+					
 					String searchLine;
 					int lineNumber = 0;
 
@@ -247,7 +253,7 @@ public class websiteBlocker extends JFrame {
 							// der Zeile anzeigen
 							position = randomAccessFile.getFilePointer();
 							positionFound = true;
-							// System.out.println("Position des Wortes: " + position);
+							//System.out.println("Position des Wortes: " + position);
 						}
 					}
 					// Schließt den BufferedReader
@@ -264,8 +270,9 @@ public class websiteBlocker extends JFrame {
 					e.printStackTrace();
 					System.err.println("Fehler beim Lesen der Datei.");
 				}
-
+				System.out.println("Position gefunden: " + positionFound);
 				if (filePath != null && positionFound) {
+					System.out.println("Writing into hosts");
 					if (position == 0) {
 						try {
 							// Erstellt eine BufferedWriter, um ans Ende der Datei zu schreiben
@@ -274,7 +281,8 @@ public class websiteBlocker extends JFrame {
 							writer.newLine();
 							writer.close();
 							
-							putToSave(line);
+							if(saveToBlacklist)
+								putToSave(line);
 							successfulWrites++;
 							textArea.setText("");
 						} catch (IOException e) {
@@ -285,34 +293,42 @@ public class websiteBlocker extends JFrame {
 						try {
 							// RandomAccessFile um an eine bestimmte Stelle zu schreiben
 							RandomAccessFile randomAccessFile = new RandomAccessFile(filePath, "rw");
+							
+							String currentLine;
+							boolean alreadyBlocked = false;
+							while ((currentLine = randomAccessFile.readLine()) != null) {
+				                if (currentLine.contains(line)) {
+				                	alreadyBlocked = true;
+				                }
+				            }
+							if(!alreadyBlocked) {
+								// sichere die restliche Datei hinter der Baustelle um keine Inhalte durch überschreiben zu verlieren
+								long fileSize = randomAccessFile.length();
+								long remainingFileSize = fileSize - position;
+								byte[] remainingBytes = new byte[(int) remainingFileSize];
+								randomAccessFile.seek(position);
+								randomAccessFile.readFully(remainingBytes);
+								try {
+									//System.out.println(remainingBytes[0]);
+								} catch (IndexOutOfBoundsException e) {
+									e.printStackTrace();
+									System.err.println("Leere restliche Datei nach #Website-Blocker.");
+								}
 
-							// sichere die restliche Datei hinter der Baustelle um keine Inhalte durch
-							// überschreiben zu verlieren
-							long fileSize = randomAccessFile.length();
-							long remainingFileSize = fileSize - position;
-							byte[] remainingBytes = new byte[(int) remainingFileSize];
-							randomAccessFile.seek(position);
-							randomAccessFile.readFully(remainingBytes);
-							try {
-								//System.out.println(remainingBytes[0]);
-							} catch (IndexOutOfBoundsException e) {
-								e.printStackTrace();
-								System.err.println("Leere restliche Datei nach #Website-Blocker.");
+								// schreibe den neuen Inhalt
+								randomAccessFile.seek(position);
+								randomAccessFile.writeBytes("127.0.0.1 " + line);
+								randomAccessFile.writeBytes(System.lineSeparator());
+								// füge die restliche Datei wieder an
+								// randomAccessFile.seek(randomAccessFile.length());
+								randomAccessFile.write(remainingBytes);
+								if(saveToBlacklist)
+									putToSave(line);
+								successfulWrites++;
 							}
-
-							// schreibe den neuen Inhalt
-							randomAccessFile.seek(position);
-							randomAccessFile.writeBytes("127.0.0.1 " + line);
-							randomAccessFile.writeBytes(System.lineSeparator());
-
-							// füge die restliche Datei wieder an
-							// randomAccessFile.seek(randomAccessFile.length());
-							randomAccessFile.write(remainingBytes);
+							if(textArea != null)
+								textArea.setText("");
 							randomAccessFile.close();
-
-							putToSave(line);
-							successfulWrites++;
-							textArea.setText("");
 						} catch (IOException e) {
 							e.printStackTrace();
 							System.err.println("Fehler beim Schreiben an eine bestimmte Stelle in der Datei.");
@@ -344,7 +360,7 @@ public class websiteBlocker extends JFrame {
 		}
 	}
 
-	public String getFile(String fp) {
+	public String getFileContent(String fp) {
 		try {
 			// Liest den gesamten Inhalt der Datei als String
 			Path path = Paths.get(fp);
@@ -366,7 +382,7 @@ public class websiteBlocker extends JFrame {
 
 	}
 	
-	private static void loadFileContentToListModel(String filePath, DefaultListModel<String> listModel) {
+	private void loadFileContentToListModel(String filePath, DefaultListModel<String> listModel) {
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -379,7 +395,7 @@ public class websiteBlocker extends JFrame {
         }
     }
 	
-	private static void commentOutStringInFile(String filePath, String stringToCommentOut) throws IOException {
+	private void commentOutStringInFile(String filePath, String stringToCommentOut) throws IOException {
 		List<String> lines = new ArrayList<>();
 
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
@@ -407,6 +423,7 @@ public class websiteBlocker extends JFrame {
         }
     }
 
+	
 	public static void main(String[] args) {
 		// Erstellt eine Instanz der GUI und zeigt sie an
 		SwingUtilities.invokeLater(new Runnable() {
