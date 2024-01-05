@@ -1,4 +1,6 @@
 import javax.swing.*;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -14,6 +16,8 @@ import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -25,6 +29,9 @@ public class websiteBlocker extends JFrame {
 	//String filePath = "C:\\Windows\\System32\\drivers\\etc\\hosts";
 	String filePathBackup = "../website-blocker/hosts_backup";
 	String filePathSave = "../website-blocker/Blacklist.txt";
+	
+	public static int selectedIndex = -1;
+	public static String selectedValue;
 
 	public websiteBlocker() {
 		// Setzt die Grundkonfiguration für das JFrame
@@ -40,6 +47,38 @@ public class websiteBlocker extends JFrame {
 		JButton manageButton = new JButton("Show blocked Websites");
 		JButton backButton = new JButton("Back");
 		backButton.setVisible(false);
+		JButton deleteButton = new JButton("Remove blockade");
+		backButton.setVisible(false);
+		
+		JFrame frame = new JFrame("Interactive List");
+        DefaultListModel<String> listModel = new DefaultListModel<>();
+
+        // Beispielinhalt zur JList hinzufügen
+        //listModel.addElement("Item 1");
+        //listModel.addElement("Item 2");
+        //listModel.addElement("Item 3");
+
+        JList<String> itemList = new JList<>(listModel);
+        JScrollPane listPane = new JScrollPane(itemList);
+
+        // ListSelectionListener hinzufügen, um auf Auswahländerungen zu reagieren
+        itemList.addListSelectionListener((ListSelectionListener) new ListSelectionListener() {
+            @Override
+            public void valueChanged(ListSelectionEvent e) {
+                if (!e.getValueIsAdjusting()) {
+                    // Hier können Sie auf die ausgewählte Zeile zugreifen
+                    selectedIndex = itemList.getSelectedIndex();
+                    if (selectedIndex != -1) {
+                        selectedValue = listModel.getElementAt(selectedIndex);
+                        System.out.println("Selected: " + selectedValue);
+                    }
+                }
+            }
+        });
+
+        frame.add(listPane);
+        listPane.setVisible(false);
+
 
 		saveButton.addActionListener(new ActionListener() {
 			@Override
@@ -53,9 +92,15 @@ public class websiteBlocker extends JFrame {
 			public void actionPerformed(ActionEvent e) {
 				saveButton.setVisible(false);
 				manageButton.setVisible(false);
+				deleteButton.setVisible(true);
 				backButton.setVisible(true);
-				textArea.setEditable(false);
-				textArea.setText(getFile(filePathSave));
+				//textArea.setEditable(false);
+				//textArea.setText(getFile(filePathSave));
+				scrollPane.setVisible(false);
+				
+				listModel.clear();
+				loadFileContentToListModel(filePathSave, listModel);
+				listPane.setVisible(true);
 			}
 		});
 
@@ -64,12 +109,32 @@ public class websiteBlocker extends JFrame {
 			public void actionPerformed(ActionEvent e) {
 				saveButton.setVisible(true);
 				manageButton.setVisible(true);
+				deleteButton.setVisible(false);
 				backButton.setVisible(false);
-				textArea.setEditable(true);
-				textArea.setText("");
+				//textArea.setEditable(true);
+				//textArea.setText("");
+				scrollPane.setVisible(true);
+				listPane.setVisible(false);
 			}
 		});
-
+		
+		deleteButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if (selectedIndex != -1) {
+                    System.out.println("Removing: " + selectedValue + " (Index " + selectedIndex + ")");
+                    try {
+                    	commentOutStringInFile(filePath, selectedValue);
+                    	commentOutStringInFile(filePathSave, selectedValue);
+						listModel.removeElementAt(selectedIndex);
+					} catch (IOException e1) {
+						// TODO Auto-generated catch block
+						e1.printStackTrace();
+					}                 
+                }
+			}
+		});
+		
 		getContentPane().setLayout(new GridBagLayout());
 		GridBagConstraints gbc = new GridBagConstraints();
 
@@ -82,6 +147,16 @@ public class websiteBlocker extends JFrame {
 		gbc.weightx = 1.0; // Gewichtung in horizontaler Richtung
 		gbc.weighty = 8.0; // Gewichtung in vertikaler Richtung
 		getContentPane().add(scrollPane, gbc);
+		
+		// JTextArea: nimmt mehrere Zellen im Gitter in Anspruch (ganze Spalte)
+		gbc.gridx = 0;
+		gbc.gridy = 0;
+		gbc.gridwidth = 2; // Zwei Zellen in der Breite
+		gbc.gridheight = 1; // Eine Zelle in der Höhe
+		gbc.fill = GridBagConstraints.BOTH; // Füllt sowohl horizontal als auch vertikal
+		gbc.weightx = 1.0; // Gewichtung in horizontaler Richtung
+		gbc.weighty = 8.0; // Gewichtung in vertikaler Richtung
+		getContentPane().add(listPane, gbc);
 
 		// Clear Button: nimmt eine Zelle im Gitter ein
 		gbc.gridx = 0;
@@ -103,6 +178,16 @@ public class websiteBlocker extends JFrame {
 		gbc.weighty = 1.0; // Keine Gewichtung in vertikaler Richtung
 		getContentPane().add(manageButton, gbc);
 
+		// Additional Button: nimmt eine Zelle im Gitter ein
+		gbc.gridx = 0;
+		gbc.gridy = 2;
+		gbc.gridwidth = 1; // Eine Zelle in der Breite
+		gbc.gridheight = 1; // Eine Zelle in der Höhe
+		gbc.fill = GridBagConstraints.BOTH; // Füllt horizontal
+		gbc.weightx = 1.0; // Keine Gewichtung in horizontaler Richtung
+		gbc.weighty = 1.0; // Keine Gewichtung in vertikaler Richtung
+		getContentPane().add(deleteButton, gbc);
+				
 		// Additional Button: nimmt eine Zelle im Gitter ein
 		gbc.gridx = 0;
 		gbc.gridy = 3;
@@ -280,6 +365,47 @@ public class websiteBlocker extends JFrame {
 	public void checkForBackup() {
 
 	}
+	
+	private static void loadFileContentToListModel(String filePath, DefaultListModel<String> listModel) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+            	if(!line.trim().startsWith("#"))
+            		listModel.addElement(line);
+            }
+            reader.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+	
+	private static void commentOutStringInFile(String filePath, String stringToCommentOut) throws IOException {
+		List<String> lines = new ArrayList<>();
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            String currentLine;
+            while ((currentLine = reader.readLine()) != null) {
+                lines.add(currentLine);
+            }
+        }
+
+        // Modifikationen vornehmen
+        for (int i = 0; i < lines.size(); i++) {
+            String currentLine = lines.get(i);
+            if (currentLine.trim().contains(stringToCommentOut)) {
+                if(!currentLine.trim().startsWith("#"))
+                	lines.set(i, "# " + currentLine);
+            }
+        }
+
+        // Modifizierten Inhalt zurück in die Datei schreiben
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath))) {
+            for (String line : lines) {
+                writer.write(line);
+                writer.newLine();  // Fügen Sie einen Zeilenumbruch hinzu
+            }
+        }
+    }
 
 	public static void main(String[] args) {
 		// Erstellt eine Instanz der GUI und zeigt sie an
